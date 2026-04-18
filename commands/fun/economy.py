@@ -3,120 +3,120 @@ from discord import app_commands
 from discord.ext import commands
 import random
 from datetime import datetime, timedelta, UTC
-from utils.json_manager import load_json, save_json
-from utils.helpers import check_permissions
+from utils.json_manager import read_data, write_data
+from utils.helpers import can_do
 
 ECONOMY_FILE = "database/economy.json"
 
 class Economy(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.cooldowns = {}
+        self.cds = {}
 
-    def get_data(self, guild_id, user_id):
-        data = load_json(ECONOMY_FILE)
-        g_id = str(guild_id)
-        u_id = str(user_id)
+    def grab_stuff(self, sid, uid):
+        data = read_data(ECONOMY_FILE)
+        g_id = str(sid)
+        u_id = str(uid)
         if g_id not in data: data[g_id] = {}
-        if u_id not in data[g_id]: data[g_id][u_id] = {"balance": 0, "last_daily": None, "last_work": None}
+        if u_id not in data[g_id]: data[g_id][u_id] = {"money": 0, "daily_t": None, "work_t": None}
         return data, g_id, u_id
 
-    @app_commands.command(name="balance", description="💰 Check your bank account")
-    async def balance(self, interaction: discord.Interaction, user: discord.Member = None):
-        await interaction.response.defer(ephemeral=False)
-        user = user or interaction.user
-        data, g_id, u_id = self.get_data(interaction.guild_id, user.id)
-        bal = data[g_id][u_id]["balance"]
+    @app_commands.command(name="money", description="💰 Check your bank account")
+    async def money(self, inter: discord.Interaction, user: discord.Member = None):
+        await inter.response.defer(ephemeral=False)
+        user = user or inter.user
+        data, g_id, u_id = self.grab_stuff(inter.guild_id, user.id)
+        bal = data[g_id][u_id]["money"]
         
-        embed = discord.Embed(title=f"💰 {user.name}'s Balance", color=discord.Color.green())
-        embed.add_field(name="Wallet", value=f"`${bal:,}`")
-        await interaction.followup.send(embed=embed)
+        emb = discord.Embed(title=f"💰 {user.name}'s Balance", color=discord.Color.green())
+        emb.add_field(name="Wallet", value=f"`${bal:,}`")
+        await inter.followup.send(emb=emb)
 
     @app_commands.command(name="daily", description="🎁 Claim your daily reward")
-    async def daily(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        data, g_id, u_id = self.get_data(interaction.guild_id, interaction.user.id)
+    async def daily(self, inter: discord.Interaction):
+        await inter.response.defer(ephemeral=False)
+        data, g_id, u_id = self.grab_stuff(inter.guild_id, inter.user.id)
         
         now = datetime.now(UTC)
-        last = data[g_id][u_id].get("last_daily")
+        last = data[g_id][u_id].get("daily_t")
         
         if last:
             last_dt = datetime.fromisoformat(last)
             if now - last_dt < timedelta(days=1):
-                next_daily = last_dt + timedelta(days=1)
-                return await interaction.followup.send(f"❌ You already claimed your daily! Try again <t:{int(next_daily.timestamp())}:R>")
+                can_daily = last_dt + timedelta(days=1)
+                return await inter.followup.send(f"❌ You already claimed your daily! Try again <t:{int(can_daily.timestamp())}:R>")
 
-        amount = random.randint(500, 2000)
-        data[g_id][u_id]["balance"] += amount
-        data[g_id][u_id]["last_daily"] = now.isoformat()
-        save_json(ECONOMY_FILE, data)
+        cash = random.randint(500, 2000)
+        data[g_id][u_id]["money"] += cash
+        data[g_id][u_id]["daily_t"] = now.isoformat()
+        write_data(ECONOMY_FILE, data)
         
-        await interaction.followup.send(f"🎁 You claimed your daily reward of **${amount:,}**!")
+        await inter.followup.send(f"🎁 You claimed your daily reward of **${cash:,}**!")
 
     @app_commands.command(name="work", description="💼 Work for some cash")
-    async def work(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        data, g_id, u_id = self.get_data(interaction.guild_id, interaction.user.id)
+    async def work(self, inter: discord.Interaction):
+        await inter.response.defer(ephemeral=False)
+        data, g_id, u_id = self.grab_stuff(inter.guild_id, inter.user.id)
         
         now = datetime.now(UTC)
-        last = data[g_id][u_id].get("last_work")
+        last = data[g_id][u_id].get("work_t")
         
         if last:
             last_dt = datetime.fromisoformat(last)
             if now - last_dt < timedelta(hours=1):
-                next_work = last_dt + timedelta(hours=1)
-                return await interaction.followup.send(f"❌ You are tired! Work again <t:{int(next_work.timestamp())}:R>")
+                can_work = last_dt + timedelta(hours=1)
+                return await inter.followup.send(f"❌ You are tired! Work again <t:{int(can_work.timestamp())}:R>")
 
-        jobs = ["Developer", "Designer", "Streamer", "Miner", "Chef", "Doctor"]
-        job = random.choice(jobs)
-        amount = random.randint(100, 500)
+        work_list = ["Developer", "Designer", "Streamer", "Miner", "Chef", "Doctor"]
+        the_job = random.choice(work_list)
+        cash = random.randint(100, 500)
         
-        data[g_id][u_id]["balance"] += amount
-        data[g_id][u_id]["last_work"] = now.isoformat()
-        save_json(ECONOMY_FILE, data)
+        data[g_id][u_id]["money"] += cash
+        data[g_id][u_id]["work_t"] = now.isoformat()
+        write_data(ECONOMY_FILE, data)
         
-        await interaction.followup.send(f"💼 You worked as a **{job}** and earned **${amount:,}**!")
+        await inter.followup.send(f"💼 You worked as a **{the_job}** and earned **${cash:,}**!")
 
     @app_commands.command(name="gamble", description="🎰 Risk it all!")
-    async def gamble(self, interaction: discord.Interaction, amount: int):
-        await interaction.response.defer(ephemeral=False)
-        if amount <= 0: return await interaction.followup.send("❌ Enter a valid amount!")
+    async def gamble(self, inter: discord.Interaction, cash: int):
+        await inter.response.defer(ephemeral=False)
+        if cash <= 0: return await inter.followup.send("❌ Enter a valid cash!")
         
-        data, g_id, u_id = self.get_data(interaction.guild_id, interaction.user.id)
-        if data[g_id][u_id]["balance"] < amount:
-            return await interaction.followup.send("❌ You don't have enough money!")
+        data, g_id, u_id = self.grab_stuff(inter.guild_id, inter.user.id)
+        if data[g_id][u_id]["money"] < cash:
+            return await inter.followup.send("❌ You don't have enough money!")
 
         win = random.choice([True, False])
         if win:
-            data[g_id][u_id]["balance"] += amount
-            msg = f"🎰 **JACKPOT!** You won **${amount:,}**!"
+            data[g_id][u_id]["money"] += cash
+            msg = f"🎰 **JACKPOT!** You won **${cash:,}**!"
             color = discord.Color.green()
         else:
-            data[g_id][u_id]["balance"] -= amount
-            msg = f"📉 **L** - You lost **${amount:,}**... Better luck next time."
+            data[g_id][u_id]["money"] -= cash
+            msg = f"📉 **L** - You lost **${cash:,}**... Better luck next time."
             color = discord.Color.red()
             
-        save_json(ECONOMY_FILE, data)
-        embed = discord.Embed(title="🎰 Gambling Den", description=msg, color=color)
-        await interaction.followup.send(embed=embed)
+        write_data(ECONOMY_FILE, data)
+        emb = discord.Embed(title="🎰 Gambling Den", description=msg, color=color)
+        await inter.followup.send(emb=emb)
 
     @app_commands.command(name="pay", description="💸 Send money to a friend")
-    async def pay(self, interaction: discord.Interaction, user: discord.Member, amount: int):
-        await interaction.response.defer(ephemeral=False)
-        if amount <= 0 or user.id == interaction.user.id:
-            return await interaction.followup.send("❌ Invalid transaction!")
+    async def pay(self, inter: discord.Interaction, user: discord.Member, cash: int):
+        await inter.response.defer(ephemeral=False)
+        if cash <= 0 or user.id == inter.user.id:
+            return await inter.followup.send("❌ Invalid transaction!")
         
-        data, g_id, u_id = self.get_data(interaction.guild_id, interaction.user.id)
-        target_data, _, t_id = self.get_data(interaction.guild_id, user.id)
+        data, g_id, u_id = self.grab_stuff(inter.guild_id, inter.user.id)
+        trg_dat, _, t_id = self.grab_stuff(inter.guild_id, user.id)
         
-        if data[g_id][u_id]["balance"] < amount:
-            return await interaction.followup.send("❌ Insufficient funds!")
+        if data[g_id][u_id]["money"] < cash:
+            return await inter.followup.send("❌ Insufficient funds!")
 
-        data[g_id][u_id]["balance"] -= amount
-        data[g_id][t_id]["balance"] += amount
-        save_json(ECONOMY_FILE, data)
+        data[g_id][u_id]["money"] -= cash
+        data[g_id][t_id]["money"] += cash
+        write_data(ECONOMY_FILE, data)
         
-        await interaction.followup.send(f"💸 Sent **${amount:,}** to {user.mention}!")
+        await inter.followup.send(f"💸 Sent **${cash:,}** to {user.mention}!")
 
 async def setup(bot):
     await bot.add_cog(Economy(bot))

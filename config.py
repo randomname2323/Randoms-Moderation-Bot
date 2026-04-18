@@ -1,28 +1,28 @@
 import os
 import discord
 
-TOKEN = 'MTQ5NTA5NzMxNTIzMTM5OTk0Ng.GnJh9Y.TKyt7FX9PDIyuHJpSkjQzcIznqfE9uywyH52iU'
+token = 'your token comes here'
 
-DB_DIR = 'database'
-TEMPBANS_FILE = os.path.join(DB_DIR, 'tempbans.json')
-TEMPMUTES_FILE = os.path.join(DB_DIR, 'tempmutes.json')
-WARNINGS_FILE = os.path.join(DB_DIR, 'warnings.json')
-AFK_FILE = os.path.join(DB_DIR, 'afk.json')
-GIVEAWAYS_FILE = os.path.join(DB_DIR, 'giveaways.json')
-REMINDERS_FILE = os.path.join(DB_DIR, 'reminders.json')
-LEVELS_FILE = os.path.join(DB_DIR, 'levels.json')
-AUTOROLES_FILE = os.path.join(DB_DIR, 'autoroles.json')
-ANTISWEAR_FILE = os.path.join(DB_DIR, 'antiswear.json')
-ANTISPAM_FILE = os.path.join(DB_DIR, 'antispam.json')
-INVITES_FILE = os.path.join(DB_DIR, 'invites.json')
-FILTER_JOIN_BOT_FILE = os.path.join(DB_DIR, 'filter_join_bot.json')
-BAD_WORDS_FILE = "bad_words.txt"
-BACKUPS_DIR = 'backups'
+db_path = 'database'
+bans_json = os.path.join(db_path, 'tempbans.json')
+mutes_json = os.path.join(db_path, 'tempmutes.json')
+warns_json = os.path.join(db_path, 'warnings.json')
+afk_json = os.path.join(db_path, 'afk.json')
+giveaways_json = os.path.join(db_path, 'giveaways.json')
+reminders_json = os.path.join(db_path, 'reminders.json')
+levels_json = os.path.join(db_path, 'levels.json')
+autoroles_json = os.path.join(db_path, 'autoroles.json')
+antiswear_json = os.path.join(db_path, 'antiswear.json')
+antispam_json = os.path.join(db_path, 'antispam.json')
+invites_json = os.path.join(db_path, 'invites.json')
+botfilter_json = os.path.join(db_path, 'filter_join_bot.json')
+bad_words_txt = "bad_words.txt"
+backup_path = 'backups'
 
-ALLOWED_USER_ID = 1418663412967145542
-DEFAULT_PREFIX = '/'
+boss_id = #your id
+prefix = '/'
 
-def get_intents():
+def grab_intents():
     intents = discord.Intents.default()
     intents.members = True
     intents.guilds = True

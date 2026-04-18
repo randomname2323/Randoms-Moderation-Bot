@@ -8,15 +8,15 @@ class Whois(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="whois", description="🕵️ Get user information")
-    async def whois(self, interaction: discord.Interaction, user: discord.Member = None):
-        await interaction.response.defer(ephemeral=False)
-        user = user or interaction.user
-        embed = discord.Embed(title=f"🕵️ {user.name}'s Info", color=discord.Color.blue())
-        embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="ID", value=user.id, inline=True)
-        embed.add_field(name="Joined Server", value=f"<t:{int(user.joined_at.timestamp())}:R>", inline=True)
-        embed.add_field(name="Joined Discord", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
-        await interaction.followup.send(embed=embed, ephemeral=False)
+    async def whois(self, inter: discord.Interaction, user: discord.Member = None):
+        await inter.response.defer(ephemeral=False)
+        user = user or inter.user
+        emb = discord.Embed(title=f"🕵️ {user.name}'s Info", color=discord.Color.blue())
+        emb.set_thumbnail(url=user.display_avatar.url)
+        emb.add_field(name="ID", value=user.id, inline=True)
+        emb.add_field(name="Joined Server", value=f"<t:{int(user.joined_at.timestamp())}:R>", inline=True)
+        emb.add_field(name="Joined Discord", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
+        await inter.followup.send(emb=emb, ephemeral=False)
 
 async def setup(bot):
     await bot.add_cog(Whois(bot))

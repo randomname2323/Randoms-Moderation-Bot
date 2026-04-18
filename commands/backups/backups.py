@@ -5,59 +5,59 @@ import os
 import json
 import logging
 import asyncio
-from utils.json_manager import save_json, load_json
-from utils.helpers import check_permissions
-from config import BACKUPS_DIR
+from utils.json_manager import write_data, read_data
+from utils.helpers import can_do
+from config import backup_path
 
 logger = logging.getLogger(__name__)
 
 class ConfirmLoadView(discord.ui.View):
-    def __init__(self, interaction, name, parent_cog):
+    def __init__(self, inter, name, parent_cog):
         super().__init__(timeout=60)
-        self.interaction = interaction
+        self.inter = inter
         self.name = name
         self.parent_cog = parent_cog
         self.confirmed = False
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.interaction.user.id:
-            return await interaction.response.send_message("❌ Not for you!", ephemeral=True)
+    async def confirm(self, inter: discord.Interaction, button: discord.ui.Button):
+        if inter.user.id != self.inter.user.id:
+            return await inter.response.send_message("❌ Not for you!", ephemeral=True)
         
         self.confirmed = True
         self.stop()
-        await interaction.response.edit_message(content="🔄 Backup loading confirmed! Loading server in progress...", view=None)
-        await self.parent_cog.execute_nuclear_restore(self.interaction, self.name)
+        await inter.response.edit_message(txt="🔄 Backup loading confirmed! Loading server in progress...", view=None)
+        await self.parent_cog.execute_nuclear_restore(self.inter, self.name)
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def cancel(self, inter: discord.Interaction, button: discord.ui.Button):
         self.stop()
-        await interaction.response.edit_message(content="❌ Loading cancelled.", view=None)
+        await inter.response.edit_message(txt="❌ Loading cancelled.", view=None)
 
 class Backups(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def get_user_backup_path(self, guild_id, user_id):
-        return os.path.join(BACKUPS_DIR, str(guild_id), str(user_id))
+    def user_backup(self, sid, uid):
+        return os.path.join(backup_path, str(sid), str(uid))
 
     @app_commands.command(name="backup_create", description="💾 Create a backup")
     @app_commands.describe(name="Name for backup")
-    async def backup_create(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=False)
-        if not await check_permissions(interaction, "administrator"): return
+    async def backup_create(self, inter: discord.Interaction, name: str):
+        await inter.response.defer(ephemeral=False)
+        if not await can_do(inter, "administrator"): return
         
-        guild = interaction.guild
+        srv = inter.guild
         data = {
-            "name": guild.name,
-            "created_by": interaction.user.name,
-            "user_id": interaction.user.id,
+            "name": srv.name,
+            "created_by": inter.user.name,
+            "uid": inter.user.id,
             "roles": [],
             "categories": [],
             "channels": []
         }
 
-        for role in reversed(guild.roles):
+        for role in reversed(srv.roles):
             if not role.is_default() and not role.managed:
                 data["roles"].append({
                     "name": role.name,
@@ -67,65 +67,65 @@ class Backups(commands.Cog):
                     "mentionable": role.mentionable
                 })
 
-        for cat in guild.categories:
+        for cat in srv.categories:
             data["categories"].append({"name": cat.name, "id": cat.id})
 
-        for channel in guild.channels:
-            if isinstance(channel, discord.CategoryChannel): continue
+        for chan in srv.channels:
+            if isinstance(chan, discord.CategoryChannel): continue
             data["channels"].append({
-                "name": channel.name,
-                "type": str(channel.type),
-                "category": channel.category.name if channel.category else None,
-                "topic": getattr(channel, 'topic', None),
-                "nsfw": getattr(channel, 'nsfw', False)
+                "name": chan.name,
+                "type": str(chan.type),
+                "category": chan.category.name if chan.category else None,
+                "topic": getattr(chan, 'topic', None),
+                "nsfw": getattr(chan, 'nsfw', False)
             })
 
-        user_path = self.get_user_backup_path(guild.id, interaction.user.id)
+        user_path = self.user_backup(srv.id, inter.user.id)
         os.makedirs(user_path, exist_ok=True)
-        file_path = os.path.join(user_path, f"{name}.json")
-        save_json(file_path, data)
+        the_file = os.path.join(user_path, f"{name}.json")
+        write_data(the_file, data)
         
-        await interaction.followup.send(f"✅ Backup **{name}**  created successfully!")
+        await inter.followup.send(f"✅ Backup **{name}**  created successfully!")
 
     @app_commands.command(name="backup_load", description="☢️ Wipe server and load backup")
     @app_commands.describe(name="Name of backup to load")
-    async def backup_load(self, interaction: discord.Interaction, name: str):
-        if not await check_permissions(interaction, "administrator"): 
-            return await interaction.response.send_message("❌ Admin only!", ephemeral=True)
+    async def backup_load(self, inter: discord.Interaction, name: str):
+        if not await can_do(inter, "administrator"): 
+            return await inter.response.send_message("❌ Admin only!", ephemeral=True)
 
-        user_path = self.get_user_backup_path(interaction.guild_id, interaction.user.id)
-        file_path = os.path.join(user_path, f"{name}.json")
+        user_path = self.user_backup(inter.guild_id, inter.user.id)
+        the_file = os.path.join(user_path, f"{name}.json")
         
-        if not os.path.exists(file_path):
-            return await interaction.response.send_message("❌ Backup not found!", ephemeral=True)
+        if not os.path.exists(the_file):
+            return await inter.response.send_message("❌ Backup not found!", ephemeral=True)
 
-        view = ConfirmLoadView(interaction, name, self)
-        await interaction.response.send_message(
-            content=f"🚨 **CAUTION**: This will **DELETE EVERYTHING** in the server and replace it with backup **{name}**. Are you absolutely sure?", 
+        view = ConfirmLoadView(inter, name, self)
+        await inter.response.send_message(
+            txt=f"🚨 **CAUTION**: This will **DELETE EVERYTHING** in the server and replace it with backup **{name}**. Are you absolutely sure?", 
             view=view
         )
 
-    async def execute_nuclear_restore(self, interaction: discord.Interaction, name: str):
-        user_path = self.get_user_backup_path(interaction.guild_id, interaction.user.id)
-        file_path = os.path.join(user_path, f"{name}.json")
-        data = load_json(file_path)
-        guild = interaction.guild
+    async def execute_nuclear_restore(self, inter: discord.Interaction, name: str):
+        user_path = self.user_backup(inter.guild_id, inter.user.id)
+        the_file = os.path.join(user_path, f"{name}.json")
+        data = read_data(the_file)
+        srv = inter.guild
 
-        for channel in guild.channels:
+        for chan in srv.channels:
             try:
-                if channel.id != interaction.channel_id:
-                    await channel.delete()
+                if chan.id != inter.channel_id:
+                    await chan.delete()
             except: pass
 
-        for role in guild.roles:
-            if not role.is_default() and not role.managed and role.position < guild.me.top_role.position:
+        for role in srv.roles:
+            if not role.is_default() and not role.managed and role.position < srv.me.top_role.position:
                 try:
                     await role.delete()
                 except: pass
 
         for r_data in data.get("roles", []):
             try:
-                await guild.create_role(
+                await srv.create_role(
                     name=r_data["name"],
                     color=discord.Color(r_data["color"]),
                     permissions=discord.Permissions(r_data["permissions"]),
@@ -137,7 +137,7 @@ class Backups(commands.Cog):
         cat_map = {}
         for c_data in data.get("categories", []):
             try:
-                new_cat = await guild.create_category(name=c_data["name"])
+                new_cat = await srv.create_category(name=c_data["name"])
                 cat_map[c_data["name"]] = new_cat
             except: pass
 
@@ -146,14 +146,14 @@ class Backups(commands.Cog):
             try:
                 cat = cat_map.get(ch_data["category"])
                 if ch_data["type"] == "text":
-                    new_ch = await guild.create_text_channel(name=ch_data["name"], category=cat, topic=ch_data["topic"], nsfw=ch_data["nsfw"])
+                    new_ch = await srv.create_text_channel(name=ch_data["name"], category=cat, topic=ch_data["topic"], nsfw=ch_data["nsfw"])
                     if not first_text_channel: first_text_channel = new_ch
                 elif ch_data["type"] == "voice":
-                    await guild.create_voice_channel(name=ch_data["name"], category=cat)
+                    await srv.create_voice_channel(name=ch_data["name"], category=cat)
             except: pass
 
         try:
-            old_channel = guild.get_channel(interaction.channel_id)
+            old_channel = srv.get_channel(inter.channel_id)
             if old_channel:
                 await old_channel.delete()
         except: pass
@@ -162,18 +162,18 @@ class Backups(commands.Cog):
             await first_text_channel.send(f"✅ Backup **{name}** loaded successfully.")
 
     @app_commands.command(name="backup_list", description="📋 List your server backups")
-    async def backup_list(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        user_path = self.get_user_backup_path(interaction.guild_id, interaction.user.id)
+    async def backup_list(self, inter: discord.Interaction):
+        await inter.response.defer(ephemeral=False)
+        user_path = self.user_backup(inter.guild_id, inter.user.id)
         
         if not os.path.exists(user_path) or not os.listdir(user_path):
-            await interaction.followup.send("📋 You haven't created any backups yet!")
+            await inter.followup.send("📋 You haven't created any backups yet!")
             return
 
         backups = [f.replace(".json", "") for f in os.listdir(user_path) if f.endswith(".json")]
-        embed = discord.Embed(title=f"📋 {interaction.user.name}'s Backups", color=discord.Color.blue())
-        embed.description = "\n".join([f"• `{b}`" for b in backups])
-        await interaction.followup.send(embed=embed)
+        emb = discord.Embed(title=f"📋 {inter.user.name}'s Backups", color=discord.Color.blue())
+        emb.description = "\n".join([f"• `{b}`" for b in backups])
+        await inter.followup.send(emb=emb)
 
 async def setup(bot):
     await bot.add_cog(Backups(bot))

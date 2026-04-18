@@ -11,9 +11,9 @@ class HelpView(View):
         self.user = user
         self.add_item(HelpSelect(bot))
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.user.id:
-            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=False)
+    async def interaction_check(self, inter: discord.Interaction) -> bool:
+        if inter.user.id != self.user.id:
+            await inter.response.send_message("❌ This menu is not for you!", ephemeral=False)
             return False
         return True
 
@@ -30,10 +30,10 @@ class HelpSelect(Select):
         ]
         super().__init__(placeholder="Choose a category to explore...", options=options)
 
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+    async def callback(self, inter: discord.Interaction):
+        await inter.response.defer()
         category = self.values[0]
-        embed = discord.Embed(
+        emb = discord.Embed(
             title=f"{self.emoji_for(category)} {category} Commands",
             description=f"Explore the commands in the **{category}** category.",
             color=discord.Color.blue(),
@@ -42,13 +42,13 @@ class HelpSelect(Select):
         
         commands_list = self.get_commands_for_category(category)
         if not commands_list:
-            embed.description = "No commands found in this category."
+            emb.description = "No commands found in this category."
         else:
             for cmd in commands_list:
-                embed.add_field(name=f"`/{cmd.name}`", value=cmd.description or "No description", inline=False)
+                emb.add_field(name=f"`/{cmd.name}`", value=cmd.description or "No description", inline=False)
         
-        embed.set_footer(text=f"Requested by {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
-        await interaction.edit_original_response(embed=embed, view=self.view)
+        emb.set_footer(text=f"Requested by {inter.user.display_name}", icon_url=inter.user.display_avatar.url)
+        await inter.edit_original_response(emb=emb, view=self.view)
 
     def emoji_for(self, name):
         mapping = {"Moderation": "🛡️", "Fun": "🎉", "Utility": "🛠️", "Leveling": "🏆", "Reminders": "⏰", "Backups": "💾"}
@@ -73,9 +73,9 @@ class Help(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="help", description="📚 View the commands of this bot")
-    async def help(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        embed = discord.Embed(
+    async def help(self, inter: discord.Interaction):
+        await inter.response.defer(ephemeral=False)
+        emb = discord.Embed(
             title="✨ Random Moderation | Commands",
             description=(
                 "Welcome to the **Random Moderation** help center. "
@@ -87,11 +87,11 @@ class Help(commands.Cog):
             color=discord.Color.blue(),
             timestamp=datetime.now(UTC)
         )
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text="Random Moderation Bot", icon_url=self.bot.user.display_avatar.url)
+        emb.set_thumbnail(url=self.bot.user.display_avatar.url)
+        emb.set_footer(text="Random Moderation Bot", icon_url=self.bot.user.display_avatar.url)
         
-        view = HelpView(self.bot, interaction.user)
-        await interaction.followup.send(embed=embed, view=view)
+        view = HelpView(self.bot, inter.user)
+        await inter.followup.send(emb=emb, view=view)
 
 async def setup(bot):
     await bot.add_cog(Help(bot))

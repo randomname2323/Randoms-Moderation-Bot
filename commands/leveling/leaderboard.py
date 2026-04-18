@@ -1,25 +1,25 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.json_manager import load_json
-from config import LEVELS_FILE
+from utils.json_manager import read_data
+from config import levels_json
 
 class Leaderboard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @app_commands.command(name="leaderboard", description="Leaderboard 📊")
-    async def leaderboard(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        levels = load_json(LEVELS_FILE)
-        guild_data = levels.get(str(interaction.guild_id), {})
-        if not guild_data:
-            await interaction.followup.send("🏆 No rankings yet!", ephemeral=False)
+    async def leaderboard(self, inter: discord.Interaction):
+        await inter.response.defer(ephemeral=False)
+        levels = read_data(levels_json)
+        srv_dat = levels.get(str(inter.guild_id), {})
+        if not srv_dat:
+            await inter.followup.send("🏆 No rankings yet!", ephemeral=False)
             return
-        sorted_users = sorted(guild_data.items(), key=lambda x: x[1]['level'], reverse=True)[:10]
+        sorted_users = sorted(srv_dat.items(), key=lambda x: x[1]['level'], reverse=True)[:10]
         desc = "\n".join([f"**{i+1}.** <@{u_id}> - Level {d['level']}" for i, (u_id, d) in enumerate(sorted_users)])
-        embed = discord.Embed(title=f"🏆 {interaction.guild.name} Leaderboard", description=desc, color=discord.Color.gold())
-        await interaction.followup.send(embed=embed, ephemeral=False)
+        emb = discord.Embed(title=f"🏆 {inter.guild.name} Leaderboard", description=desc, color=discord.Color.gold())
+        await inter.followup.send(emb=emb, ephemeral=False)
 
 async def setup(bot):
     await bot.add_cog(Leaderboard(bot))

@@ -3,12 +3,12 @@ from discord.ext import commands, tasks
 import logging
 import os
 import asyncio
-from config import TOKEN, get_intents, BACKUPS_DIR
-from utils.json_manager import init_json_file
+from config import token, grab_intents, backup_path
+from utils.json_manager import setup_data
 from config import (
-    TEMPBANS_FILE, TEMPMUTES_FILE, WARNINGS_FILE, AFK_FILE, 
-    GIVEAWAYS_FILE, REMINDERS_FILE, LEVELS_FILE, AUTOROLES_FILE,
-    ANTISWEAR_FILE, ANTISPAM_FILE, INVITES_FILE, FILTER_JOIN_BOT_FILE
+    bans_json, mutes_json, warns_json, afk_json, 
+    giveaways_json, reminders_json, levels_json, autoroles_json,
+    antiswear_json, antispam_json, invites_json, botfilter_json
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,7 +18,7 @@ class RandomBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix='/',
-            intents=get_intents(),
+            intents=grab_intents(),
             help_command=None
         )
 
@@ -37,70 +37,70 @@ class RandomBot(commands.Bot):
         """
         print(splash)
 
-        self.last_modified = {}
+        self.update_times = {}
 
-        os.makedirs(BACKUPS_DIR, exist_ok=True)
-        files_to_init = [
-            (TEMPBANS_FILE, {}), (TEMPMUTES_FILE, {}), (WARNINGS_FILE, {}), 
-            (AFK_FILE, {}), (GIVEAWAYS_FILE, {}), (REMINDERS_FILE, {}), 
-            (LEVELS_FILE, {}), (AUTOROLES_FILE, {}), (ANTISWEAR_FILE, {}), 
-            (ANTISPAM_FILE, {}), (INVITES_FILE, {}), (FILTER_JOIN_BOT_FILE, {"blocklist": []}),
+        os.makedirs(backup_path, exist_ok=True)
+        files_needed = [
+            (bans_json, {}), (mutes_json, {}), (warns_json, {}), 
+            (afk_json, {}), (giveaways_json, {}), (reminders_json, {}), 
+            (levels_json, {}), (autoroles_json, {}), (antiswear_json, {}), 
+            (antispam_json, {}), (invites_json, {}), (botfilter_json, {"blocklist": []}),
             ("database/economy.json", {})
         ]
         
-        for file_path, default in files_to_init:
-            init_json_file(file_path, default)
+        for the_file, default in files_needed:
+            setup_data(the_file, default)
 
-        cog_folders = ['commands', 'core']
-        loaded_count = 0
-        for folder in cog_folders:
+        cog_dirs = ['commands', 'core']
+        cogs_ready = 0
+        for folder in cog_dirs:
             for root, dirs, files in os.walk(folder):
                 for file in files:
                     if file.endswith('.py') and not file.startswith('__'):
                         path = os.path.join(root, file)
-                        self.last_modified[path] = os.path.getmtime(path)
-                        module = path.replace(os.sep, '.')[:-3]
+                        self.update_times[path] = os.path.getmtime(path)
+                        ext = path.replace(os.sep, '.')[:-3]
                         try:
-                            await self.load_extension(module)
-                            loaded_count += 1
-                            print(f"\033[92m[✓]\033[0m Loaded extension: {module}")
+                            await self.load_extension(ext)
+                            cogs_ready += 1
+                            print(f"\033[92m[✓]\033[0m Loaded extension: {ext}")
                         except Exception as e:
-                            print(f"\033[91m[✗]\033[0m Failed to load extension {module}: {e}")
+                            print(f"\033[91m[✗]\033[0m Failed to load extension {ext}: {e}")
 
-        self.hot_reload_loop.start()
-        print(f"\n\033[94m» Loaded {loaded_count} extensions successfully.\033[0m")
+        self.auto_reload.start()
+        print(f"\n\033[94m» Loaded {cogs_ready} extensions successfully.\033[0m")
         print(f"\033[94m» Bot is ready.\033[0m\n")
 
     @tasks.loop(seconds=2)
-    async def hot_reload_loop(self):
-        cog_folders = ['commands', 'core']
-        for folder in cog_folders:
+    async def auto_reload(self):
+        cog_dirs = ['commands', 'core']
+        for folder in cog_dirs:
             for root, dirs, files in os.walk(folder):
                 for file in files:
                     if file.endswith('.py') and not file.startswith('__'):
                         path = os.path.join(root, file)
-                        mtime = os.path.getmtime(path)
+                        mod_t = os.path.getmtime(path)
                         
-                        if path in self.last_modified:
-                            if mtime > self.last_modified[path]:
-                                module = path.replace(os.sep, '.')[:-3]
+                        if path in self.update_times:
+                            if mod_t > self.update_times[path]:
+                                ext = path.replace(os.sep, '.')[:-3]
                                 try:
-                                    await self.reload_extension(module)
-                                    self.last_modified[path] = mtime
-                                    print(f"\033[94m[⚡]\033[0m Reloaded: {module}")
+                                    await self.reload_extension(ext)
+                                    self.update_times[path] = mod_t
+                                    print(f"\033[94m[⚡]\033[0m Reloaded: {ext}")
                                 except Exception as e:
-                                    print(f"\033[91m[✗]\033[0m Failed to reload {module}: {e}")
+                                    print(f"\033[91m[✗]\033[0m Failed to reload {ext}: {e}")
                         else:
-                            self.last_modified[path] = mtime
-                            module = path.replace(os.sep, '.')[:-3]
+                            self.update_times[path] = mod_t
+                            ext = path.replace(os.sep, '.')[:-3]
                             try:
-                                await self.load_extension(module)
-                                print(f"\033[32m[+]\033[0m Loaded new extension: {module}")
+                                await self.load_extension(ext)
+                                print(f"\033[32m[+]\033[0m Loaded new extension: {ext}")
                             except Exception as e:
-                                print(f"\033[91m[✗]\033[0m Failed to load new extension {module}: {e}")
+                                print(f"\033[91m[✗]\033[0m Failed to load new extension {ext}: {e}")
 
-    @hot_reload_loop.before_loop
-    async def before_hot_reload_loop(self):
+    @auto_reload.before_loop
+    async def wait_up(self):
         await self.wait_until_ready()
 
     async def on_ready(self):
@@ -111,7 +111,7 @@ class RandomBot(commands.Bot):
 async def main():
     bot = RandomBot()
     async with bot:
-        await bot.start(TOKEN)
+        await bot.start(token)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -13,51 +13,51 @@ class PollView(discord.ui.View):
         self.voted_users = set()
 
     @discord.ui.button(label="Option 1", style=discord.ButtonStyle.primary)
-    async def opt1(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_vote(interaction, 1)
+    async def opt1(self, inter: discord.Interaction, button: discord.ui.Button):
+        await self.handle_vote(inter, 1)
 
     @discord.ui.button(label="Option 2", style=discord.ButtonStyle.secondary)
-    async def opt2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.handle_vote(interaction, 2)
+    async def opt2(self, inter: discord.Interaction, button: discord.ui.Button):
+        await self.handle_vote(inter, 2)
 
-    async def handle_vote(self, interaction: discord.Interaction, choice):
-        if interaction.user.id in self.voted_users:
-            return await interaction.response.send_message("❌ You already voted!", ephemeral=True)
+    async def handle_vote(self, inter: discord.Interaction, choice):
+        if inter.user.id in self.voted_users:
+            return await inter.response.send_message("❌ You already voted!", ephemeral=True)
         
-        self.voted_users.add(interaction.user.id)
+        self.voted_users.add(inter.user.id)
         if choice == 1: self.votes1 += 1
         else: self.votes2 += 1
 
-        embed = interaction.message.embeds[0]
+        emb = inter.msg.embeds[0]
         total = self.votes1 + self.votes2
         p1 = (self.votes1 / total) * 100 if total > 0 else 0
         p2 = (self.votes2 / total) * 100 if total > 0 else 0
         
-        embed.set_field_at(0, name=f"🔹 {self.choice1_label}", value=f"Votes: `{self.votes1}` ({p1:.1f}%)", inline=False)
-        embed.set_field_at(1, name=f"🔸 {self.choice2_label}", value=f"Votes: `{self.votes2}` ({p2:.1f}%)", inline=False)
+        emb.set_field_at(0, name=f"🔹 {self.choice1_label}", value=f"Votes: `{self.votes1}` ({p1:.1f}%)", inline=False)
+        emb.set_field_at(1, name=f"🔸 {self.choice2_label}", value=f"Votes: `{self.votes2}` ({p2:.1f}%)", inline=False)
         
-        await interaction.response.edit_message(embed=embed)
+        await inter.response.edit_message(emb=emb)
 
 class Polls(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @app_commands.command(name="poll", description="📊 Create a poll")
-    async def poll(self, interaction: discord.Interaction, question: str, choice1: str, choice2: str):
-        embed = discord.Embed(
+    async def poll(self, inter: discord.Interaction, question: str, choice1: str, choice2: str):
+        emb = discord.Embed(
             title=f"📊 {question}", 
             color=discord.Color.blue(), 
             timestamp=datetime.now(UTC)
         )
-        embed.add_field(name=f"🔹 {choice1}", value="Votes: `0` (0.0%)", inline=False)
-        embed.add_field(name=f"🔸 {choice2}", value="Votes: `0` (0.0%)", inline=False)
-        embed.set_footer(text=f"Poll by {interaction.user.display_name}")
+        emb.add_field(name=f"🔹 {choice1}", value="Votes: `0` (0.0%)", inline=False)
+        emb.add_field(name=f"🔸 {choice2}", value="Votes: `0` (0.0%)", inline=False)
+        emb.set_footer(text=f"Poll by {inter.user.display_name}")
 
         view = PollView(choice1, choice2)
         view.children[0].label = f"Vote {choice1}"
         view.children[1].label = f"Vote {choice2}"
         
-        await interaction.response.send_message(embed=embed, view=view)
+        await inter.response.send_message(emb=emb, view=view)
 
 async def setup(bot):
     await bot.add_cog(Polls(bot))

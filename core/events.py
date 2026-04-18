@@ -3,18 +3,18 @@ from discord.ext import commands
 import logging
 from datetime import datetime, UTC, timedelta
 from collections import defaultdict, deque
-from utils.json_manager import load_json, save_json, load_bad_words
+from utils.json_manager import read_data, write_data, get_words
 from config import (
-    ANTISWEAR_FILE, ANTISPAM_FILE, INVITES_FILE, AFK_FILE, 
-    LEVELS_FILE, AUTOROLES_FILE, FILTER_JOIN_BOT_FILE, 
-    BAD_WORDS_FILE
+    antiswear_json, antispam_json, invites_json, afk_json, 
+    levels_json, autoroles_json, botfilter_json, 
+    bad_words_txt
 )
 import re
 
 logger = logging.getLogger(__name__)
 INVITE_REGEX = re.compile(r'(?:https?:\/\/)?discord(?:app)?\.com\/invite\/([a-zA-Z0-9-]+)')
 
-class Events(commands.Cog):
+class EventHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.antispam_history = defaultdict(deque)
@@ -24,100 +24,100 @@ class Events(commands.Cog):
         logger.info(f"Bot logged in as {self.bot.user.name}")
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or not message.guild:
+    async def on_message(self, msg: discord.Message):
+        if msg.author.bot or not msg.guild:
             return
         
-        guild_id = str(message.guild.id)
-        user_id = str(message.author.id)
+        sid = str(msg.guild.id)
+        uid = str(msg.author.id)
 
-        antiswear_config = load_json(ANTISWEAR_FILE)
-        if guild_id in antiswear_config and antiswear_config[guild_id]["enabled"]:
-            content_lower = message.content.lower()
-            bad_words = load_bad_words(BAD_WORDS_FILE)
-            if any(word in content_lower for word in bad_words):
+        swear_settings = read_data(antiswear_json)
+        if sid in swear_settings and swear_settings[sid]["enabled"]:
+            text_low = msg.content.lower()
+            no_no_list = get_words(bad_words_txt)
+            if any(word in text_low for word in no_no_list):
                 try: 
-                    await message.delete()
-                    await message.channel.send(f"🚫 {message.author.mention}, {antiswear_config[guild_id]['warning_message']}", delete_after=5)
+                    await msg.delete()
+                    await msg.channel.send(f"🚫 {msg.author.mention}, {swear_settings[sid]['warning_message']}", delete_after=5)
                     return
                 except: pass
 
-        antispam_config = load_json(ANTISPAM_FILE)
-        if guild_id in antispam_config and antispam_config[guild_id]["enabled"]:
-            history = self.antispam_history[user_id]
-            history.append(message.created_at)
+        spam_settings = read_data(antispam_json)
+        if sid in spam_settings and spam_settings[sid]["enabled"]:
+            hist = self.antispam_history[uid]
+            hist.append(msg.created_at)
             
-            window_sec = antispam_config[guild_id].get("window_seconds", 10)
-            threshold = antispam_config[guild_id].get("threshold", 5)
+            window = spam_settings[sid].get("window_seconds", 10)
+            limit = spam_settings[sid].get("limit", 5)
             
-            window = timedelta(seconds=window_sec)
-            recent = [m for m in history if message.created_at - m < window]
+            window = timedelta(seconds=window)
+            last_few = [m for m in hist if msg.created_at - m < window]
             
-            if len(recent) > threshold:
+            if len(last_few) > limit:
                 try:
-                    await message.delete()
-                    await message.channel.send(f"🛡️ {message.author.mention}, {antispam_config[guild_id]['warning_message']}", delete_after=5)
+                    await msg.delete()
+                    await msg.channel.send(f"🛡️ {msg.author.mention}, {spam_settings[sid]['warning_message']}", delete_after=5)
                     return
                 except: pass
 
-        if INVITE_REGEX.search(message.content):
-            if (guild_id in antiswear_config and antiswear_config[guild_id]["enabled"]) or \
-               (guild_id in antispam_config and antispam_config[guild_id]["enabled"]):
+        if INVITE_REGEX.search(msg.content):
+            if (sid in swear_settings and swear_settings[sid]["enabled"]) or \
+               (sid in spam_settings and spam_settings[sid]["enabled"]):
                 try:
-                    await message.delete()
-                    await message.channel.send(f"🔗 {message.author.mention}, Invite links are not allowed here!", delete_after=5)
+                    await msg.delete()
+                    await msg.channel.send(f"🔗 {msg.author.mention}, Invite links are not allowed here!", delete_after=5)
                     return
                 except: pass
 
-        afk_data = load_json(AFK_FILE)
-        if guild_id in afk_data and user_id in afk_data[guild_id]:
-            del afk_data[guild_id][user_id]
-            save_json(AFK_FILE, afk_data)
-            await message.channel.send(f"👋 Welcome back {message.author.mention}, I've removed your AFK status.", delete_after=5)
+        afk_db = read_data(afk_json)
+        if sid in afk_db and uid in afk_db[sid]:
+            del afk_db[sid][uid]
+            write_data(afk_json, afk_db)
+            await msg.channel.send(f"👋 Welcome back {msg.author.mention}, I've removed your AFK status.", delete_after=5)
 
-        for mentioned in message.mentions:
+        for mentioned in msg.mentions:
             m_id = str(mentioned.id)
-            if guild_id in afk_data and m_id in afk_data[guild_id]:
-                await message.channel.send(f"🌙 {mentioned.name} is currently AFK: **{afk_data[guild_id][m_id]['status']}**")
+            if sid in afk_db and m_id in afk_db[sid]:
+                await msg.channel.send(f"🌙 {mentioned.name} is currently AFK: **{afk_db[sid][m_id]['status']}**")
 
-        if not message.content.startswith('/'):
-            levels = load_json(LEVELS_FILE)
-            user_data = levels.setdefault(guild_id, {}).setdefault(user_id, {"messages": 0, "level": 0})
-            user_data["messages"] += 1
-            if user_data["messages"] % 100 == 0:
-                user_data["level"] += 1
-                await message.channel.send(f"⭐ {message.author.mention} reached level **{user_data['level']}**!")
-            save_json(LEVELS_FILE, levels)
+        if not msg.content.startswith('/'):
+            levels = read_data(levels_json)
+            usr_dat = levels.setdefault(sid, {}).setdefault(uid, {"messages": 0, "level": 0})
+            usr_dat["messages"] += 1
+            if usr_dat["messages"] % 100 == 0:
+                usr_dat["level"] += 1
+                await msg.channel.send(f"⭐ {msg.author.mention} reached level **{usr_dat['level']}**!")
+            write_data(levels_json, levels)
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
-        guild_id = str(member.guild.id)
+    async def on_member_join(self, mem):
+        sid = str(mem.guild.id)
         
-        filter_config = load_json(FILTER_JOIN_BOT_FILE)
-        if guild_id in filter_config and filter_config[guild_id].get("enabled", False):
-            age_threshold = filter_config[guild_id].get("min_age_days", 1)
-            account_age = (datetime.now(UTC) - member.created_at).days
+        join_settings = read_data(botfilter_json)
+        if sid in join_settings and join_settings[sid].get("enabled", False):
+            min_days = join_settings[sid].get("min_age_days", 1)
+            acc_age = (datetime.now(UTC) - mem.created_at).days
             
-            if account_age < age_threshold or (filter_config[guild_id].get("no_avatar", False) and not member.avatar):
+            if acc_age < min_days or (join_settings[sid].get("no_avatar", False) and not mem.avatar):
                 try:
-                    await member.send(f"❌ You were kicked from **{member.guild.name}** because your account is too new or lacks an avatar.")
-                    await member.kick(reason="Join Filter: Account too new / No avatar")
+                    await mem.send(f"❌ You were kicked from **{mem.guild.name}** because your account is too new or lacks an avatar.")
+                    await mem.kick(why="Join Filter: Account too new / No avatar")
                     return
                 except: pass
 
-        config = load_json(AUTOROLES_FILE)
-        if guild_id in config and config[guild_id].get("enabled", False):
-            role_id = config[guild_id].get("role_id")
+        config = read_data(autoroles_json)
+        if sid in config and config[sid].get("enabled", False):
+            role_id = config[sid].get("role_id")
             if role_id:
-                role = member.guild.get_role(int(role_id))
+                role = mem.guild.get_role(int(role_id))
                 if role: 
-                    try: await member.add_roles(role)
+                    try: await mem.add_roles(role)
                     except: pass
 
 
     @commands.Cog.listener()
-    async def on_message_delete(self, message):
-        if not message.guild or message.author.bot: return
+    async def on_message_delete(self, msg):
+        if not msg.guild or msg.author.bot: return
 
 async def setup(bot):
-    await bot.add_cog(Events(bot))
+    await bot.add_cog(EventHandler(bot))

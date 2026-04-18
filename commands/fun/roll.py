@@ -9,24 +9,24 @@ class Roll(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="roll", description="🎲 Roll a dice with animation")
-    async def roll(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🎲 Dice Roll", description="Rolling...", color=discord.Color.blue())
-        await interaction.response.send_message(embed=embed)
+    async def roll(self, inter: discord.Interaction):
+        emb = discord.Embed(title="🎲 Dice Roll", description="Rolling...", color=discord.Color.blue())
+        await inter.response.send_message(emb=emb)
         
         dice_frames = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
         for _ in range(3):
             for face in random.sample(dice_frames, 3):
-                embed.description = f"**{face}** . . ."
-                await interaction.edit_original_response(embed=embed)
+                emb.description = f"**{face}** . . ."
+                await inter.edit_original_response(emb=emb)
                 await asyncio.sleep(0.3)
 
         result = random.randint(1, 6)
         face = dice_frames[result-1]
         
-        embed.title = "🎲 Result"
-        embed.description = f"You rolled a **{result}** {face}!"
-        embed.color = discord.Color.green()
-        await interaction.edit_original_response(embed=embed)
+        emb.title = "🎲 Result"
+        emb.description = f"You rolled a **{result}** {face}!"
+        emb.color = discord.Color.green()
+        await inter.edit_original_response(emb=emb)
 
 async def setup(bot):
     await bot.add_cog(Roll(bot))

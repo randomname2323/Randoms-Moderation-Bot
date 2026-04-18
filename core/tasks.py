@@ -3,54 +3,54 @@ from discord.ext import commands, tasks
 import logging
 from datetime import datetime, UTC
 from dateutil.parser import parse
-from utils.json_manager import load_json, save_json
-from config import TEMPBANS_FILE, TEMPMUTES_FILE, REMINDERS_FILE
+from utils.json_manager import read_data, write_data
+from config import bans_json, mutes_json, reminders_json
 
 logger = logging.getLogger(__name__)
 
-class Tasks(commands.Cog):
+class TaskHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.cleanup_slots.start()
-        self.check_reminders.start()
+        self.clean_stuff.start()
+        self.remind_check.start()
 
     def cog_unload(self):
-        self.cleanup_slots.cancel()
-        self.check_reminders.cancel()
+        self.clean_stuff.cancel()
+        self.remind_check.cancel()
 
     @tasks.loop(minutes=1)
-    async def cleanup_slots(self):
+    async def clean_stuff(self):
         now = discord.utils.utcnow()
-        tempbans = load_json(TEMPBANS_FILE)
-        tempmutes = load_json(TEMPMUTES_FILE)
+        tempbans = read_data(bans_json)
+        tempmutes = read_data(mutes_json)
         
-        for guild_id, bans in list(tempbans.items()):
-            for user_id, data in list(bans.items()):
+        for sid, bans in list(tempbans.items()):
+            for uid, data in list(bans.items()):
                 if now >= parse(data['expiry']):
-                    guild = self.bot.get_guild(int(guild_id))
-                    if guild:
+                    srv = self.bot.get_guild(int(sid))
+                    if srv:
                         try:
-                            await guild.unban(discord.Object(id=int(user_id)))
-                            del tempbans[guild_id][user_id]
+                            await srv.unban(discord.Object(id=int(uid)))
+                            del tempbans[sid][uid]
                         except: pass
-        save_json(TEMPBANS_FILE, tempbans)
+        write_data(bans_json, tempbans)
 
-        for guild_id, mutes in list(tempmutes.items()):
-            for user_id, data in list(mutes.items()):
+        for sid, mutes in list(tempmutes.items()):
+            for uid, data in list(mutes.items()):
                 if now >= parse(data['expiry']):
-                    guild = self.bot.get_guild(int(guild_id))
-                    member = guild.get_member(int(user_id)) if guild else None
-                    if member:
+                    srv = self.bot.get_guild(int(sid))
+                    mem = srv.get_member(int(uid)) if srv else None
+                    if mem:
                         try:
-                            await member.timeout(None)
-                            del tempmutes[guild_id][user_id]
+                            await mem.timeout(None)
+                            del tempmutes[sid][uid]
                         except: pass
-        save_json(TEMPMUTES_FILE, tempmutes)
+        write_data(mutes_json, tempmutes)
 
     @tasks.loop(seconds=30)
-    async def check_reminders(self):
+    async def remind_check(self):
         now = discord.utils.utcnow()
-        reminders = load_json(REMINDERS_FILE)
+        reminders = read_data(reminders_json)
         for g_id, g_reminders in list(reminders.items()):
             for u_id, u_reminders in list(g_reminders.items()):
                 for r_id, data in list(u_reminders.items()):
@@ -61,7 +61,7 @@ class Tasks(commands.Cog):
                                 await user.send(f"⏰ **Reminder**: {data['reminder']}")
                             except: pass
                         del reminders[g_id][u_id][r_id]
-        save_json(REMINDERS_FILE, reminders)
+        write_data(reminders_json, reminders)
 
 async def setup(bot):
-    await bot.add_cog(Tasks(bot))
+    await bot.add_cog(TaskHandler(bot))
